@@ -1,5 +1,8 @@
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class Environment {
     private Square[][] grid;
@@ -12,25 +15,25 @@ public class Environment {
         String[] colorList = new String[]{"RED", "BLUE", "PINK", "PURPLE", "YELLOW", "GREEN", "ORANGE"};
 
         Random r = new Random();
+        int x = 0;
+        int y = 0;
+        int finalX = 0;
+        int finalY = 0;
         for(int i = 0; i < agentCount; i++) {
-            int x = 0;
-            int y = 0;
-            int finalX = 0;
-            int finalY = 0;
+            // Permutations
             do {
                 x = r.nextInt(width);
                 y = r.nextInt(height);
             }
             while(grid[x][y].isTaken());
             do {
-                x = r.nextInt(width);
-                y = r.nextInt(height);
+                finalX = r.nextInt(width);
+                finalY = r.nextInt(height);
             }
             while(finalGrid[x][y].isTaken());
 
-            Agent a = new Agent();
+            Agent a = new Agent (i);
             agentList[i] = a;
-            a.setColor(colorList[i]);
             a.setCoords(x, y);
             a.setFinalCoords(finalX, finalY);
             a.setEnvironnment(this);
@@ -46,18 +49,38 @@ public class Environment {
     }
 
     public List<int[]> getPossibleMoves(int x, int y) {
-        return null;
+        List <int []> allMoves = List.of (
+                new int [] {x - 1, y - 1},
+                new int [] {x - 1, y + 1},
+                new int [] {x + 1, y - 1},
+                new int [] {x + 1, y + 1}
+        );
+        List <int []> possibleMoves = allMoves
+                .stream ()
+                .filter (move -> isPossibleMove (move [0], move [1]))
+                .collect (Collectors.toList ());
+        return possibleMoves;
+    }
+
+    public int computeManhattanDistance (int case1_x, int case1_y, int case2_x, int case2_y) {
+        int diffX = Math.abs (case2_x - case1_x);
+        int diffY = Math.abs (case2_y - case1_y);
+        return diffX + diffY;
     }
 
     public Agent[] getAgentList() {
         return agentList;
     }
 
-    public Square[][] getGrid() {
-        return grid;
+    public Square getCaseInGrid (int x, int y) {
+        return grid [x][y];
     }
 
-    public Square[][] getFinalGrid() {
-        return finalGrid;
+    public Square getCaseInFinalGrid (int x, int y) {
+        return finalGrid [x][y];
+    }
+
+    public String toString () {
+        return Arrays.deepToString (grid);
     }
 }

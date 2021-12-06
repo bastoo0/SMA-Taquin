@@ -31,4 +31,21 @@ public class Square {
             return false;
         }
     }
+
+    public String toString () {
+        return agent.isPresent()? agent.get ().toString (): "#";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Square square = (Square) o;
+        return agent.equals(square.agent);
+    }
+
+    @Override
+    public int hashCode() {
+        return 0;
+    }
 }
