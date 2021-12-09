@@ -9,15 +9,15 @@ public class Environment implements Runnable {
     private Square[][] finalGrid;
     private Agent[] agentList;
 
+
     public Environment(int height, int width, int agentCount) {
-        this.grid = new Square[height][width];
-        this.finalGrid = new Square[height][width];
-        for (int i = 0; i < grid.length; ++i) {
-            for (int j = 0; j < grid[0].length; ++j) {
-                finalGrid[i][j] = new Square ();
-                grid [i][j] = new Square ();
+        grid = new Square[height][width];
+        finalGrid = new Square[height][width];
+        for(int i = 0; i < height; i++)
+            for(int j = 0; j < width; j++) {
+                grid[i][j] = new Square();
+                finalGrid[i][j] = new Square();
             }
-        }
         agentList = new Agent[agentCount];
         String[] colorList = new String[]{"RED", "BLUE", "PINK", "PURPLE", "YELLOW", "GREEN", "ORANGE"};
 
@@ -79,18 +79,18 @@ public class Environment implements Runnable {
         return agentList;
     }
 
-    public Square getCaseInGrid (int x, int y) {
+    public Square getSquareInGrid (int x, int y) {
         return grid [x][y];
     }
 
-    public void setCaseInGrid (Agent agent, int x, int y) {
+    public void setSquareInGrid (Agent agent, int x, int y) {
         int previousX = agent.currentX;
         int previousY = agent.currentY;
         grid [previousX][previousY].setAgent (null);
         grid [x][y].setAgent (agent);
     }
 
-    public Square getCaseInFinalGrid (int x, int y) {
+    public Square getSquareInFinalGrid (int x, int y) {
         return finalGrid [x][y];
     }
 
@@ -98,6 +98,7 @@ public class Environment implements Runnable {
         return Arrays.deepToString (grid);
     }
 
+    @Override
     public void run() {
         while (true) {
             System.out.println (this);
@@ -108,4 +109,8 @@ public class Environment implements Runnable {
             }
         }
     }
+    public int getHeight() { return grid.length; }
+
+    public int getWidth() { return grid[0].length; }
+
 }
