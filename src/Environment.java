@@ -4,13 +4,20 @@ import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class Environment {
+public class Environment implements Runnable {
     private Square[][] grid;
     private Square[][] finalGrid;
     private Agent[] agentList;
 
     public Environment(int height, int width, int agentCount) {
         this.grid = new Square[height][width];
+        this.finalGrid = new Square[height][width];
+        for (int i = 0; i < grid.length; ++i) {
+            for (int j = 0; j < grid[0].length; ++j) {
+                finalGrid[i][j] = new Square ();
+                grid [i][j] = new Square ();
+            }
+        }
         agentList = new Agent[agentCount];
         String[] colorList = new String[]{"RED", "BLUE", "PINK", "PURPLE", "YELLOW", "GREEN", "ORANGE"};
 
@@ -76,11 +83,29 @@ public class Environment {
         return grid [x][y];
     }
 
+    public void setCaseInGrid (Agent agent, int x, int y) {
+        int previousX = agent.currentX;
+        int previousY = agent.currentY;
+        grid [previousX][previousY].setAgent (null);
+        grid [x][y].setAgent (agent);
+    }
+
     public Square getCaseInFinalGrid (int x, int y) {
         return finalGrid [x][y];
     }
 
     public String toString () {
         return Arrays.deepToString (grid);
+    }
+
+    public void run() {
+        while (true) {
+            System.out.println (this);
+            try {
+                Thread.sleep (100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
     }
 }
