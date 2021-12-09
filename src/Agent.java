@@ -18,7 +18,7 @@ public class Agent implements Runnable {
 
     @Override
     public void run() {
-        while (true) {
+        while (!isSolvedPuzzle()) {
             tryMove ();
             try {
                 Thread.sleep (100);
@@ -34,14 +34,13 @@ public class Agent implements Runnable {
                 .stream ()
                 .sorted (Comparator.comparingInt (move -> environment.computeManhattanDistance (move [0], move [1], destX, destY)));
         Optional<int []> availableMove = movesByDistance
-                .filter (move -> !environment.getCaseInGrid (move [0], move [1]).isTaken () && environment.getCaseInGrid (move [0], move [1]).tryLock ())
+                .filter (move -> !environment.getSquareInGrid (move [0], move [1]).isTaken () && environment.getSquareInGrid (move [0], move [1]).tryLock ())
                 .findFirst ();
         if (availableMove.isPresent ()) {
-            System.out.println ("test");
             int [] move = availableMove.get ();
-            environment.setCaseInGrid (this, move [0], move [1]);
+            environment.setSquareInGrid (this, move [0], move [1]);
             setCoords (move [0], move [1]);
-            environment.getCaseInGrid (move [0], move [1]).tryUnlock ();
+            environment.getSquareInGrid (move [0], move [1]).tryUnlock ();
         }
     }
 
@@ -63,18 +62,20 @@ public class Agent implements Runnable {
         return currentX == destX && currentY == destY;
     }
 
-    /*private boolean isSolvedPuzzle () {
+    private boolean isSolvedPuzzle () {
         if (!isInRightPosition()) {
             return false;
         }
-        for (Square [] row: grid) {
-            // ajouter un getter sur grid
-            for (Square square: row) {
-
+        int height = environment.getHeight();
+        int width = environment.getWidth();
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                if (!environment.getSquareInGrid(i, j).equals(environment.getSquareInFinalGrid(i, j)))
+                    return false;
             }
         }
         return true;
-    }*/
+    }
 
     public String toString () {
         return "" + id;
