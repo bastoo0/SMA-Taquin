@@ -64,6 +64,14 @@ public class Agent implements Runnable {
         this.destY = finalY;
     }
 
+    public int getCurrentX () {
+        return currentX;
+    }
+
+    public int getCurrentY () {
+        return currentY;
+    }
+
     public int getFinalX () {
         return destX;
     }
@@ -100,7 +108,10 @@ public class Agent implements Runnable {
         return true;
     }
 
+    public int getId () {
+        return id;
+    }
     public String toString () {
-        return "" + id;
+        return "" + (10 + id);
     }
 }

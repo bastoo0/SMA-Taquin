@@ -1,19 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.GridPane?>
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.text.Text?>
 
 <?import java.net.URL?>
+
 <BorderPane xmlns:fx="http://javafx.com/fxml">
     <left>
-        <VBox alignment="TOP_CENTER">
-            <Text text="Grille actuelle" />
-            <GridPane fx:id="drawnGrid">
+        <VBox styleClass="grid-container">
+            <Text text="Grille actuelle" styleClass="grid-name" />
+            <GridPane fx:id="currentGrid" styleClass="grid">
             </GridPane>
         </VBox>
     </left>
+    <right>
+        <VBox styleClass="grid-container">
+            <Text text="Objectif" styleClass="grid-name" />
+            <GridPane fx:id="finalGrid" styleClass="grid">
+            </GridPane>
+        </VBox>
+    </right>
 
     <stylesheets>
         <URL value="@style.css" />

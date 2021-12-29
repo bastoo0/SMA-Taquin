@@ -8,6 +8,7 @@ import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.control.Label;
 import javafx.scene.layout.*;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
@@ -19,18 +20,17 @@ import java.util.List;
 import java.util.Set;
 
 public class Main extends Application {
-    public GridPane drawnGrid;
-    private Pane [][] gridInMemory;
-
     public void start(Stage stage) throws IOException {
-        BorderPane root = FXMLLoader.load (getClass ().getResource("user-interface.fxml"));
-        drawnGrid = (GridPane) ((VBox) root.getLeft()).getChildren ().get (1); // à mettre dans des getters / setters
-        Scene scene = new Scene(root, 320, 240);
+        FXMLLoader fxmlLoader = new FXMLLoader (getClass().getResource("user-interface.fxml"));
+        var env = new Environment (5, 5, 5);
+        fxmlLoader.setController (new Controller (env));
+        Parent root = fxmlLoader.load ();
+        Scene scene = new Scene(root, 300, 185);
         stage.setTitle("Taquin - ALLE DUPUCH");
         stage.setScene(scene);
 
-        var env = new Environment (5, 5, 5);
-        initializeView (env);
+
+        //initializeView (env);
         var t = new Thread (env);
         t.start ();
         env.getAgentList()
@@ -39,7 +39,7 @@ public class Main extends Application {
                     (new Thread (agent)).start ();
                 });
 
-        updateView (env);
+        //updateView (env);
         stage.show();
         /*while (true) {
             try {
@@ -49,34 +49,15 @@ public class Main extends Application {
                 e.printStackTrace();
             }
         }*/
-        Timeline timeline =
+        /*Timeline timeline =
                 new Timeline(new KeyFrame(Duration.millis(1000), e -> {updateView (env);}));
         timeline.setCycleCount(Animation.INDEFINITE); // loop forever
-        timeline.play();
+        timeline.play();*/
     }
 
-    public void initializeView (Environment environment) {
-        // On est obligés d'avoir une 2e grille en mémoire car pour accéder à
-        // une cellule d'un GridPane, il faut reparcourir toute la grille.
-        gridInMemory = new Pane [environment.getWidth()][];
-        for (int x = 0; x < environment.getWidth(); ++x) {
-            gridInMemory [x] = new Pane [environment.getHeight ()];
-            for (int y = 0; y < environment.getHeight (); ++y) {
-                Pane drawnSquare = new StackPane();
-                Text textSquare = new Text (" ");
-
-                drawnSquare.getStyleClass().add ("square");
-                System.out.println (drawnSquare.getStyleClass ());
-                drawnSquare.getChildren ().add (textSquare);
-                textSquare.getStyleClass().add ("text-square");
-                drawnGrid.add (drawnSquare, x, y);
-                gridInMemory [x][y] = drawnSquare;
-            }
-        }
-    }
 
     //définir taux de rafraichissement
-    public void updateView (Environment environment) {
+    /*public void updateView (Environment environment) {
         Set<List <Integer>> agentPositions = new HashSet<>();
         List <Agent> agentsToLock = environment.getAgentList ();
         while (!agentsToLock.isEmpty()) {
@@ -93,7 +74,7 @@ public class Main extends Application {
             Pane drawnSquare = gridInMemory [agent.currentX][agent.currentY];
             drawnSquare.getStyleClass().removeAll ("right-position", "wrong-position");
             drawnSquare.getStyleClass().add (squareBackground);
-            Text text = (Text) drawnSquare.getChildren().get (0);
+            Label text = (Label) drawnSquare.getChildren().get (0);
             text.setText (agent.toString ());
         }
 
@@ -103,13 +84,13 @@ public class Main extends Application {
                 if (!agentPositions.contains (currentPosition)) {
                     Pane drawnSquare = gridInMemory [x][y];
                     drawnSquare.getStyleClass().removeAll ("right-position", "wrong-position");
-                    Text text = (Text) drawnSquare.getChildren().get (0);
+                    Label text = (Label) drawnSquare.getChildren().get (0);
                     text.setText (" ");
                 }
             }
         }
         environment.getAgentList().stream ().forEach (Agent::allowMove);
-    }
+    }*/
 
     public static void main(String[] args) {
         launch();
