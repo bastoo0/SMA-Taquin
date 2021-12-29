@@ -1,0 +1,7 @@
+.right-position {
+    -fx-background-color: red;
+}
+
+.wrong-position {
+    -fx-background-color: green;
+}

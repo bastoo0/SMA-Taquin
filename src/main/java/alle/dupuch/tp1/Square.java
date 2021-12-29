@@ -1,3 +1,5 @@
+package alle.dupuch.tp1;
+
 import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 

@@ -1,13 +1,15 @@
+package alle.dupuch.tp1;
+
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class Environment implements Runnable {
     private Square[][] grid;
     private Square[][] finalGrid;
-    private Agent[] agentList;
+    private List <Agent> agentList;
 
 
     public Environment(int height, int width, int agentCount) {
@@ -18,7 +20,7 @@ public class Environment implements Runnable {
                 grid[i][j] = new Square();
                 finalGrid[i][j] = new Square();
             }
-        agentList = new Agent[agentCount];
+        agentList = new ArrayList<>();
         String[] colorList = new String[]{"RED", "BLUE", "PINK", "PURPLE", "YELLOW", "GREEN", "ORANGE"};
 
         Random r = new Random();
@@ -40,7 +42,7 @@ public class Environment implements Runnable {
             while(finalGrid[x][y].isTaken());
 
             Agent a = new Agent (i);
-            agentList[i] = a;
+            agentList.add (a);
             a.setCoords(x, y);
             a.setFinalCoords(finalX, finalY);
             a.setEnvironnment(this);
@@ -75,8 +77,8 @@ public class Environment implements Runnable {
         return diffX + diffY;
     }
 
-    public Agent[] getAgentList() {
-        return agentList;
+    public List <Agent> getAgentList() {
+        return new ArrayList (agentList);
     }
 
     public Square getSquareInGrid (int x, int y) {

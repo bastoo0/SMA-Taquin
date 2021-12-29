@@ -1,3 +1,5 @@
+package alle.dupuch.tp1;
+
 public class Colors {
     public static final String BLACK = "\033[0;30m";   // BLACK
     public static final String RED = "\033[0;31m";     // RED
