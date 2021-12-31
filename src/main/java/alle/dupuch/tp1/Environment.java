@@ -1,118 +1,113 @@
 package alle.dupuch.tp1;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
-import java.util.Random;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-public class Environment implements Runnable {
-    private Square[][] grid;
-    private Square[][] finalGrid;
+public class Environment {
+    private Grid currentGrid;
+    private Grid finalGrid;
     private List <Agent> agentList;
 
+    public Environment (int width, int height, int agentCount) {
+        agentList = new ArrayList <> ();
+        for (int i = 0; i < agentCount; ++i) {
+            Agent agent = new Agent ();
+            agent.setEnvironnment (this);
+            agentList.add (agent);
+        }
 
-    public Environment(int height, int width, int agentCount) {
-        grid = new Square[height][width];
-        finalGrid = new Square[height][width];
-        for(int i = 0; i < height; i++)
-            for(int j = 0; j < width; j++) {
-                grid[i][j] = new Square();
-                finalGrid[i][j] = new Square();
-            }
-        agentList = new ArrayList<>();
-        String[] colorList = new String[]{"RED", "BLUE", "PINK", "PURPLE", "YELLOW", "GREEN", "ORANGE"};
+        currentGrid = new Grid (width, height);
+        finalGrid = new Grid (width, height);
 
-        Random r = new Random();
-        int x = 0;
-        int y = 0;
-        int finalX = 0;
-        int finalY = 0;
-        for(int i = 0; i < agentCount; i++) {
-            // Permutations
-            do {
-                x = r.nextInt(width);
-                y = r.nextInt(height);
-            }
-            while(grid[x][y].isTaken());
-            do {
-                finalX = r.nextInt(width);
-                finalY = r.nextInt(height);
-            }
-            while(finalGrid[x][y].isTaken());
+        populateGrid (currentGrid);
+        populateGrid (finalGrid);
+    }
 
-            Agent a = new Agent (i);
-            agentList.add (a);
-            a.setCoords(x, y);
-            a.setFinalCoords(finalX, finalY);
-            a.setEnvironnment(this);
-            grid[x][y].setAgent(a);
-            finalGrid[finalX][finalY].setAgent(a);
+    private void populateGrid (Grid grid) {
+        boolean isFinalGrid = grid == finalGrid;
+        int agentCount = agentList.size ();
+        List <Integer> permutation = createPermutation (grid.getWidth () * grid.getHeight (), agentCount);
+
+        for (int x = 0; x < grid.getWidth (); ++x) {
+            for (int y = 0; y < grid.getHeight (); ++y) {
+                int agentId = permutation.get (y * grid.getWidth () + x);
+                // Si la case est occupée
+                if (agentId != -1) {
+                    BoundedPoint2D position = new BoundedPoint2D (x, y);
+                    Agent agent = agentList.get (agentId);
+
+                    // On met à jour
+                    grid.getSquare (position).setAgent (agent);
+                    if (isFinalGrid) {
+                        agent.setFinalPosition (position);
+                    } else {
+                        agent.setCurrentPosition (position);
+                    }
+                }
+            }
         }
     }
 
-    public boolean isPossibleMove(int x, int y) {
-        int height = grid.length;
-        int width = grid[0].length;
-        return x >= 0 && x < width && y >= 0 && y < height;
+    // Renvoie un tableau de type [-1, 1, 0, -1, 2] où -1 correspond à une case vide (permet de placer les agents dans la grille initiale
+    // et la grille finale).
+    private List <Integer> createPermutation (int valuesCount, int nonEmptyValuesCount) {
+        List <Integer> permutation = Stream
+                .iterate (0, i -> i + 1)
+                .limit (valuesCount)
+                .map (i -> i >= nonEmptyValuesCount? -1: i)
+                .collect (Collectors.toList ());
+        Collections.shuffle(permutation);
+        return permutation;
     }
 
-    public List<int[]> getPossibleMoves(int x, int y) {
-        List <int []> allMoves = List.of (
-                new int [] {x - 1, y - 1},
-                new int [] {x - 1, y + 1},
-                new int [] {x + 1, y - 1},
-                new int [] {x + 1, y + 1}
+    public List <BoundedPoint2D> getNeighbours (BoundedPoint2D currentPosition) {
+        List <Point2D> translations = List.of (
+            new Point2D (- 1, 0),
+            new Point2D (+1, 0),
+            new Point2D (0, - 1),
+            new Point2D (0, + 1)
         );
-        List <int []> possibleMoves = allMoves
-                .stream ()
-                .filter (move -> isPossibleMove (move [0], move [1]))
-                .collect (Collectors.toList ());
+        List <BoundedPoint2D> possibleMoves = new ArrayList <> ();
+        for (var translation: translations) {
+            try {
+                var newPoint = currentPosition.add (translation);
+                possibleMoves.add (newPoint);
+            } catch (Exception e) {}
+        }
         return possibleMoves;
     }
 
-    public int computeManhattanDistance (int case1_x, int case1_y, int case2_x, int case2_y) {
-        int diffX = Math.abs (case2_x - case1_x);
-        int diffY = Math.abs (case2_y - case1_y);
-        return diffX + diffY;
-    }
-
     public List <Agent> getAgentList() {
-        return new ArrayList (agentList);
+        return new ArrayList <> (agentList);
     }
 
-    public Square getSquareInGrid (int x, int y) {
-        return grid [x][y];
+    public void setNewPositionInCurrentGrid (Agent agent, BoundedPoint2D newPosition) {
+        var previousPosition = agent.getCurrentPosition ();
+        currentGrid.getSquare (previousPosition).setAgent (null);
+        currentGrid.getSquare (newPosition).setAgent (agent);
     }
 
-    public void setSquareInGrid (Agent agent, int x, int y) {
-        int previousX = agent.currentX;
-        int previousY = agent.currentY;
-        grid [previousX][previousY].setAgent (null);
-        grid [x][y].setAgent (agent);
+    public Grid getCurrentGrid () {
+        return currentGrid;
     }
 
-    public Square getSquareInFinalGrid (int x, int y) {
-        return finalGrid [x][y];
+    public Grid getFinalGrid () {
+        return finalGrid;
     }
 
-    public String toString () {
-        return Arrays.deepToString (grid);
+    public int getWidth () {
+        return currentGrid.getWidth();
     }
 
-    @Override
-    public void run() {
-        while (true) {
-            System.out.println (this);
-            try {
-                Thread.sleep (100);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
+    public int getHeight () {
+        return currentGrid.getHeight ();
     }
-    public int getHeight() { return grid.length; }
 
-    public int getWidth() { return grid[0].length; }
-
+    public Square getSquare (BoundedPoint2D position, Grids gridName) {
+        Grid grid = gridName == Grids.CURRENT? currentGrid: finalGrid;
+        return grid.getSquare (position);
+    }
 }

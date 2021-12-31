@@ -4,31 +4,33 @@
 }
 
 .grid-container {
-    -fx-alignment: top-center;
-    -fx-spacing: 10px;
+    -fx-alignment: top-center; /* On centre les noms des grilles */
+    -fx-spacing: 10px; /* On rajoute un padding en-dessous du nom des grilles */
 }
 
 .grid-name {
     -fx-font-size: 14px;
     -fx-font-weight: bold;
-    -fx-effect: dropshadow(gaussian, lightgray, 0, 0, 3, 3);
 }
 
-.grid{
+.grid {
     -fx-grid-lines-visible: true;
 }
 
-.square {
+.current-square, .final-square {
+    -fx-text-background-color: white; /* Couleur de la police */
     -fx-border-color: black;
     -fx-font-weight: bold;
-    -fx-text-background-color: white;
 }
 
-.right-position {
-    -fx-background-color: linear-gradient(green, #0d4200);
+.current-square.right-position {
+    -fx-background-color: darkgreen;
 }
 
-.wrong-position {
-    -fx-background-color: linear-gradient(red, #8a0707);
+.current-square.wrong-position {
+    -fx-background-color: #d20000;
 }
 
+.final-square.busy {
+    -fx-background-color: darkblue;
+}

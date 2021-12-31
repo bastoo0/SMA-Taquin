@@ -1,43 +1,36 @@
 package alle.dupuch.tp1;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Square {
-    private Optional<Agent> agent;
-
-    private ReentrantLock mutex;
+    private Optional <Agent> agent;
+    private ReentrantLock mutexForMove;
 
     public Square(){
-        agent = Optional.empty();
-        mutex = new ReentrantLock();
-    }
-
-    public void setAgent(Agent agent) {
-        this.agent = Optional.ofNullable(agent);
+        agent = Optional.empty ();
+        mutexForMove = new ReentrantLock ();
     }
 
     public boolean isTaken() {
         return agent.isPresent();
     }
 
-    public boolean tryLock() {
-        return mutex.tryLock();
+    public void setAgent (Agent agent) {
+        this.agent = Optional.ofNullable (agent);
     }
 
-    public boolean tryUnlock() {
-        try {
-            mutex.unlock();
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+    public void allowMove () {
+        mutexForMove.unlock();
     }
 
-    public String toString () {
-        return agent.isPresent()? agent.get ().toString (): "#";
+    // renvoie False si un autre agent essaye de se déplacer sur cette case en même temps
+    public boolean freezeOtherMoves() {
+        return mutexForMove.tryLock();
     }
 
+    // Pour la comparaison de la grille actuelle avec la grille finale
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -48,6 +41,6 @@ public class Square {
 
     @Override
     public int hashCode() {
-        return 0;
+        return Objects.hash (agent);
     }
 }

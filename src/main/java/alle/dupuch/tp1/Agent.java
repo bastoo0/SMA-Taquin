@@ -2,29 +2,28 @@ package alle.dupuch.tp1;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Stream;
+import java.util.stream.Collectors;
 
 public class Agent implements Runnable {
+    private static int nextId = 0;
+
     private int id;
-    public int currentX;
-    public int currentY;
-    private int destX;
-    private int destY;
-    private ReentrantLock mutex;
-
+    private BoundedPoint2D currentPosition;
+    private BoundedPoint2D finalPosition;
     private Environment environment;
+    private ReentrantLock mutexForMove;
 
-    public Agent (int id) {
-        this.id = id;
-        this.mutex = new ReentrantLock ();
+    public Agent () {
+        this.id = nextId;
+        ++nextId;
+        this.mutexForMove = new ReentrantLock ();
     }
 
     @Override
     public void run() {
         while (!isSolvedPuzzle()) {
-            tryMove ();
+            if (!isInFinalPosition ()) tryMove ();
             try {
                 Thread.sleep (100);
             } catch (InterruptedException e) {
@@ -34,84 +33,76 @@ public class Agent implements Runnable {
     }
 
     public void allowMove () {
-        mutex.unlock ();
+        mutexForMove.unlock ();
     }
 
-    public boolean finishCurrentMove () {
-        return mutex.tryLock ();
+    // renvoie true si le mutex a pu être verrouillé (i.e. l'agent n'était pas en train de se déplacer)
+    public boolean tryFreeze () {
+        return mutexForMove.tryLock ();
     }
 
     private void tryMove() {
-        if (!mutex.tryLock ()) return;
-        List<int []> possibleMoves = environment.getPossibleMoves (currentX, currentY);
-        Stream<int []> movesByDistance = possibleMoves
+        if (!mutexForMove.tryLock ()) return; // on essaye de verrouiller le mutex pour le déplacement (pour éviter les problèmes d'affichage)
+        List <BoundedPoint2D> possibleMoves = environment.getNeighbours (currentPosition);
+        List <BoundedPoint2D> movesByDistance = possibleMoves
                 .stream ()
-                .sorted (Comparator.comparingInt (move -> environment.computeManhattanDistance (move [0], move [1], destX, destY)));
-        Optional<int []> availableMove = movesByDistance
-                .filter (move -> !environment.getSquareInGrid (move [0], move [1]).isTaken () && environment.getSquareInGrid (move [0], move [1]).tryLock ())
-                .findFirst ();
-        if (availableMove.isPresent ()) {
-            int [] move = availableMove.get ();
-            environment.setSquareInGrid (this, move [0], move [1]);
-            setCoords (move [0], move [1]);
-            environment.getSquareInGrid (move [0], move [1]).tryUnlock ();
+                .sorted (Comparator.comparingInt (move -> move.manhattanDistance (finalPosition)))
+                .collect (Collectors.toList ());
+        for (BoundedPoint2D move: movesByDistance) {
+            Square square = environment.getSquare (move, Grids.CURRENT);
+            if (!square.isTaken () && square.freezeOtherMoves()) {
+                environment.setNewPositionInCurrentGrid (this, move);
+                setCurrentPosition (move);
+                environment.getSquare (move, Grids.CURRENT).allowMove();
+                break;
+            }
         }
-        mutex.unlock ();
+        mutexForMove.unlock ();
     }
 
-    public void setFinalCoords(int finalX, int finalY) {
-        this.destX = finalX;
-        this.destY = finalY;
+    public int getId () {
+        return id;
     }
 
-    public int getCurrentX () {
-        return currentX;
+    public BoundedPoint2D getCurrentPosition () {
+        return currentPosition;
     }
 
-    public int getCurrentY () {
-        return currentY;
+    public BoundedPoint2D getFinalPosition () {
+        return finalPosition;
     }
 
-    public int getFinalX () {
-        return destX;
+    public void setCurrentPosition (BoundedPoint2D position) {
+        this.currentPosition = position;
     }
 
-    public int getFinalY () {
-        return destY;
-    }
-
-    public void setCoords(int x, int y) {
-        this.currentX = x;
-        this.currentY = y;
+    public void setFinalPosition (BoundedPoint2D position) {
+        this.finalPosition = position;
     }
 
     public void setEnvironnment(Environment environment) {
         this.environment = environment;
     }
 
-    private boolean isInRightPosition () {
-        return currentX == destX && currentY == destY;
+    public boolean isInFinalPosition() {
+        return currentPosition.equals (finalPosition);
     }
 
     private boolean isSolvedPuzzle () {
-        if (!isInRightPosition()) {
+        if (!isInFinalPosition()) {
             return false;
         }
+        // L'agent connaît la grille actuelle et la grille finale. Par conséquent, il compare case par case les 2 grilles pour voir si
+        // le taquin a été résolu
         int height = environment.getHeight();
         int width = environment.getWidth();
-        for (int i = 0; i < height; i++) {
-            for (int j = 0; j < width; j++) {
-                if (!environment.getSquareInGrid(i, j).equals(environment.getSquareInFinalGrid(i, j)))
+        for (int x = 0; x < width; ++x) {
+            for (int y = 0; y < height; ++y) {
+                var position = new BoundedPoint2D (x, y);
+                if (!environment.getSquare (position, Grids.CURRENT).equals(environment.getSquare (position, Grids.FINAL)))
                     return false;
             }
         }
         return true;
-    }
-
-    public int getId () {
-        return id;
-    }
-    public String toString () {
-        return "" + (10 + id);
     }
 }
