@@ -8,7 +8,6 @@ import javafx.scene.image.Image;
 import javafx.stage.Stage;
 
 import java.io.IOException;
-import java.util.List;
 
 public class Main extends Application {
     public void start(Stage stage) throws IOException {
@@ -42,13 +41,13 @@ public class Main extends Application {
         environment.getAgentList ()
             .stream ()
             .forEach (agent -> {
-                (new Thread (agent)).start ();
+                Thread agentThread = new Thread (agent);
+                agentThread.setDaemon (true);
+                agentThread.start ();
             });
     }
 
     public static void main(String[] args) {
         launch (args);
     }
-
-    // Ne pas oublier d'arrêter proprement l'application
 }

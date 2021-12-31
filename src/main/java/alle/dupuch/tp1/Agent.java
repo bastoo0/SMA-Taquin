@@ -25,7 +25,7 @@ public class Agent implements Runnable {
         while (!isSolvedPuzzle()) {
             if (!isInFinalPosition ()) tryMove ();
             try {
-                Thread.sleep (100);
+                Thread.sleep (200);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
