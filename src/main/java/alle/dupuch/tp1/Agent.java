@@ -1,7 +1,8 @@
 package alle.dupuch.tp1;
 
-import java.util.Comparator;
-import java.util.List;
+import javafx.scene.effect.Light;
+
+import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
@@ -23,7 +24,7 @@ public class Agent implements Runnable {
     @Override
     public void run() {
         while (!isSolvedPuzzle()) {
-            if (!isInFinalPosition ()) tryMove ();
+            if (!isInFinalPosition ()) tryMoveAStar ();
             try {
                 Thread.sleep (200);
             } catch (InterruptedException e) {
@@ -49,6 +50,97 @@ public class Agent implements Runnable {
                 .sorted (Comparator.comparingInt (move -> move.manhattanDistance (finalPosition)))
                 .collect (Collectors.toList ());
         for (BoundedPoint2D move: movesByDistance) {
+            Square square = environment.getSquare (move, Grids.CURRENT);
+            if (!square.isTaken () && square.freezeOtherMoves()) {
+                environment.setNewPositionInCurrentGrid (this, move);
+                setCurrentPosition (move);
+                environment.getSquare (move, Grids.CURRENT).allowMove();
+                break;
+            }
+        }
+        mutexForMove.unlock ();
+    }
+
+    private void tryMoveAStar() {
+        if (!mutexForMove.tryLock ()) return; // on essaye de verrouiller le mutex pour le déplacement (pour éviter les problèmes d'affichage)
+
+        BoundedPoint2D startingPosition = this.currentPosition;
+        LinkedList<BoundedPoint2D> openList = new LinkedList<BoundedPoint2D>();
+        openList.add(startingPosition);
+        LinkedList<BoundedPoint2D> closedList = new LinkedList<BoundedPoint2D>();
+
+        HashMap<BoundedPoint2D, Integer> gScore = new HashMap<BoundedPoint2D, Integer>();
+        gScore.put(startingPosition, 0);
+        HashMap<BoundedPoint2D, Integer> fScore = new HashMap<BoundedPoint2D, Integer>();
+        fScore.put(startingPosition, startingPosition.manhattanDistance(finalPosition));
+
+        HashMap<BoundedPoint2D, BoundedPoint2D> cameFrom = new HashMap<BoundedPoint2D, BoundedPoint2D>();
+
+        LinkedList<BoundedPoint2D> path = new LinkedList<BoundedPoint2D> ();
+
+        while(!openList.isEmpty()) {
+
+            /*
+             On récupère la position avec le fScore le plus faible
+             Le fScore est calculé tel que F = G + H
+             Avec G = cout d'un déplacement (1 dans notre cas)
+             Et H = Heuristique d'évaluation du A*: dans notre cas la distance de Manhattan avec la position finale
+             */
+            BoundedPoint2D bestPosition = null;
+            for (BoundedPoint2D pos : openList) {
+                if (bestPosition == null) {
+                    bestPosition = pos;
+                } else if (fScore.getOrDefault(pos, Integer.MAX_VALUE) < fScore.getOrDefault(bestPosition, Integer.MAX_VALUE)) {
+                    bestPosition = pos;
+                }
+            }
+            BoundedPoint2D currentAlgPos = bestPosition;
+
+            // Fin si on a atteint la position finale
+            if(currentAlgPos.equals(this.finalPosition)) {
+                BoundedPoint2D curr = currentAlgPos;
+                path.add(curr);
+                while(cameFrom.containsKey(curr)) {
+                    curr = cameFrom.get(curr);
+                    path.addFirst(curr);
+                }
+                break;
+            }
+
+            // On n'évaluera plus la position actuelle
+            openList.remove(currentAlgPos);
+            closedList.add(currentAlgPos);
+
+            // On vérifie tous les voisins
+            for (BoundedPoint2D neighbor : environment.getNeighbours(currentAlgPos)) {
+                Square square = environment.getSquare (neighbor, Grids.CURRENT);
+
+                // Si position libre et jamais explorée
+                if(!closedList.contains(neighbor)) {
+
+                    /*
+                     On ajoute les voisins avec un gScore plus élevé dans la openList.
+                     On met à jour tous les scores avant de passer à la position suivante.
+                     */
+                    int currGScore = gScore.getOrDefault(currentAlgPos, Integer.MAX_VALUE)
+                            + currentAlgPos.manhattanDistance(neighbor);
+
+                    if (currGScore < gScore.getOrDefault(neighbor, Integer.MAX_VALUE)) {
+
+                        cameFrom.put(neighbor, currentAlgPos); // Pour reconstituer le chemin
+                        // Mise à jour des scores
+                        gScore.put(neighbor, currGScore);
+                        int currFScore = currGScore + neighbor.manhattanDistance(finalPosition);
+                        fScore.put(neighbor, currFScore);
+
+                        if (!openList.contains(neighbor)) {
+                            openList.add(neighbor);
+                        }
+                    }
+                }
+            }
+        }
+        for (BoundedPoint2D move: path) {
             Square square = environment.getSquare (move, Grids.CURRENT);
             if (!square.isTaken () && square.freezeOtherMoves()) {
                 environment.setNewPositionInCurrentGrid (this, move);
