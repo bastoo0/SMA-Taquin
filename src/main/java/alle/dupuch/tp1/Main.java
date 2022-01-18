@@ -1,5 +1,6 @@
 package alle.dupuch.tp1;
 
+import alle.dupuch.tp1.message.MessageQueue;
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
@@ -21,6 +22,7 @@ public class Main extends Application {
         BoundedPoint2D.setTopRight (new Point2D (environmentWidth - 1, environmentHeight - 1));
 
         Environment environment = new Environment (environmentWidth, environmentHeight, agentCount);
+        MessageQueue.init(environment.getAgentList());
 
         // On lance la création de l'interface
         FXMLLoader fxmlLoader = new FXMLLoader (getClass ().getResource ("interface.fxml"));
