@@ -1,15 +1,19 @@
 package alle.dupuch.tp1;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.lang.Math.abs;
+
 public class Environment {
     private Grid currentGrid;
     private Grid finalGrid;
     private List <Agent> agentList;
+    int[][] spiral;
 
     public Environment (int width, int height, int agentCount) {
         agentList = new ArrayList <> ();
@@ -24,6 +28,9 @@ public class Environment {
 
         populateGrid (currentGrid);
         populateGrid (finalGrid);
+
+        generateSpiral();
+        printSpiral();
     }
 
     private void populateGrid (Grid grid) {
@@ -78,6 +85,68 @@ public class Environment {
             } catch (Exception e) {}
         }
         return possibleMoves;
+    }
+
+    // On calcule la priorité de l'agent en fonction de sa distance avec les bords
+    // Plus un agent est proche du bord, plus sa priorité est élevée
+    // Les angles ont une priorité plus élevée que les bords
+    public double getPriorityStrategyEdges(Agent agent) {
+        if (agent.isInFinalPosition()) return 0;
+        int posX = agent.getCurrentPosition().x;
+        int posY = agent.getCurrentPosition().y;
+        double halfWidth = currentGrid.getWidth() / 2.0;
+        double halfHeight = currentGrid.getHeight() / 2.0;
+        double priority = Math.pow(posX - halfWidth, 2) * 0.8 + Math.pow(posY - halfHeight, 2);
+        // Plus on est loin + on a de priorité
+        priority += (abs(agent.getFinalPosition().x - posX) + abs(agent.getFinalPosition().y - posY)) / 2.0;
+        return priority;
+    }
+
+    private void generateSpiral() {
+        int WIDTH = currentGrid.getWidth();
+        int HEIGHT = currentGrid.getHeight();
+
+        // On initialise la spirale à 0
+        spiral = new int[WIDTH][HEIGHT];
+        for (int[] ints : spiral) {
+            Arrays.fill(ints, 0);
+        }
+
+        int num = WIDTH * HEIGHT;
+        int x = 0, y = 0, dx = 1, dy = 0;
+        while (num > 0) {
+            spiral[x][y] = num--;
+            int nextX = x + dx;
+            int nextY = y + dy;
+            if (nextX < 0 || nextX == WIDTH || nextY < 0 || nextY == HEIGHT || spiral[nextX][nextY] != 0) {
+                int t = dy;
+                dy = dx;
+                dx = -t;
+            }
+            x += dx;
+            y += dy;
+        }
+    }
+
+    public int getSpiralPriority(BoundedPoint2D pos) {
+        return spiral[pos.getX()][pos.getY()];
+    }
+
+    private void printSpiral() {
+        for (int i = 0; i < spiral.length; i++)
+        {
+            for (int j = 0; j < spiral.length; j++)
+            {
+                System.out.print(spiral[i][j]+ "\t");
+            }
+            System.out.println();
+        }
+    }
+
+    public double getPriorityStrategySpiral(Agent agent) {
+        int posX = agent.getCurrentPosition().x;
+        int posY = agent.getCurrentPosition().y;
+        return spiral[posX][posY];
     }
 
     public List <Agent> getAgentList() {

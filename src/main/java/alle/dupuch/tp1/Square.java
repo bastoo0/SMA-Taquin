@@ -22,15 +22,15 @@ public class Square {
     }
 
     public void allowMove () {
-        if (mutexForMove.isHeldByCurrentThread())
-            mutexForMove.unlock();
+        mutexForMove.unlock();
+    }
+
+    public boolean isLocked () {
+        return mutexForMove.isLocked();
     }
 
     public Optional<Agent> getAgent() {
-        if(agent.isPresent()) {
-            return this.agent;
-        }
-        return null;
+        return this.agent;
     }
 
     // renvoie False si un autre agent essaye de se déplacer sur cette case en même temps

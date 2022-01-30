@@ -16,7 +16,7 @@ public class Main extends Application {
         // dans un CLI avec des paramètres comme -a=5 (agentCount), etc
         int environmentWidth = 5;
         int environmentHeight = 5;
-        int agentCount = 5;
+        int agentCount = 12;
 
         BoundedPoint2D.setBottomLeft (new Point2D (0, 0));
         BoundedPoint2D.setTopRight (new Point2D (environmentWidth - 1, environmentHeight - 1));

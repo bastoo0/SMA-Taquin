@@ -16,6 +16,7 @@ public class Agent implements Runnable {
     private BoundedPoint2D finalPosition;
     private Environment environment;
     private ReentrantLock mutexForMove;
+    private double agentPower;
 
     public Agent () {
         this.id = nextId;
@@ -26,13 +27,14 @@ public class Agent implements Runnable {
     @Override
     public void run() {
         while (!isSolvedPuzzle()) {
+            setAgentPower();
+            Message msg = grabMessage(MessageType.REQUEST_MOVE);
+            if(msg != null)
+                handleWithPriority(msg);
             if (!isInFinalPosition ()) tryMoveAStar ();
-            else {
-                Message msg = waitMessage(MessageType.REQUEST_MOVE);
-                getRequest(msg);
-            }
+            //else System.out.println(mutexForMove.isLocked());
             try {
-                Thread.sleep (500);
+                Thread.sleep (200);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -46,6 +48,14 @@ public class Agent implements Runnable {
     // renvoie true si le mutex a pu être verrouillé (i.e. l'agent n'était pas en train de se déplacer)
     public boolean tryFreeze () {
         return mutexForMove.tryLock ();
+    }
+
+    public void setAgentPower() {
+        agentPower = environment.getPriorityStrategyEdges(this);
+    }
+
+    public double getAgentPower() {
+        return agentPower;
     }
 
     private void tryMove() {
@@ -67,9 +77,7 @@ public class Agent implements Runnable {
         mutexForMove.unlock ();
     }
 
-    private void tryMoveAStar() {
-        if (!mutexForMove.tryLock ()) return; // on essaye de verrouiller le mutex pour le déplacement (pour éviter les problèmes d'affichage)
-
+    private LinkedList<BoundedPoint2D> getAStarPath() {
         BoundedPoint2D startingPosition = this.currentPosition;
         LinkedList<BoundedPoint2D> openList = new LinkedList<BoundedPoint2D>();
         openList.add(startingPosition);
@@ -137,6 +145,16 @@ public class Agent implements Runnable {
                         // Mise à jour des scores
                         gScore.put(neighbor, currGScore);
                         int currFScore = currGScore + neighbor.manhattanDistance(finalPosition);
+                        if(square.freezeOtherMoves()) {
+                            if (square.isTaken())
+                                currFScore += 5;
+                            if (square.getAgent().isPresent() && square.getAgent().orElseThrow().isInFinalPosition())
+                                currFScore += 5;
+                            square.allowMove();
+                        }
+                        else {
+                            currFScore += 5;
+                        }
                         fScore.put(neighbor, currFScore);
 
                         if (!openList.contains(neighbor)) {
@@ -147,18 +165,35 @@ public class Agent implements Runnable {
             }
         }
         path.pop();
-        for (int i = 0; i < path.size(); i++) {
-            BoundedPoint2D move = path.get(i);
-            Square square = environment.getSquare (move, Grids.CURRENT);
-            if (!square.isTaken () && square.freezeOtherMoves()) {
+        return path;
+    }
+
+    private void tryMoveAStar() {
+        if (!mutexForMove.tryLock ()) return; // on essaye de verrouiller le mutex pour le déplacement (pour éviter les problèmes d'affichage)
+        BoundedPoint2D move = null;
+        if(Math.random() > 0.1) {
+            LinkedList<BoundedPoint2D> path = getAStarPath();
+            move = path.get(0);
+        }
+        else { // 10% de chance de choisir un mouvement aléatoire (pour débloquer)
+            Random r = new Random();
+            List<BoundedPoint2D> moveList = environment.getNeighbours(currentPosition);
+            move = moveList.get(r.nextInt(moveList.size()));
+        }
+
+        Square square = environment.getSquare (move, Grids.CURRENT);
+        if(square.freezeOtherMoves()) { // On bloque la case, si on ne peut pas bloquer, on passe son tour
+            if (!square.isTaken()) {
                 makeMove(move);
-                environment.getSquare (move, Grids.CURRENT).allowMove();
             } else {
                 Optional<Agent> reqAgent = square.getAgent();
-                if(reqAgent != null && !reqAgent.isEmpty() && pushAgent(reqAgent.orElseThrow())) {
+                if (reqAgent.isPresent()) {
+                    pushAgent(reqAgent.orElseThrow());
+                } else {
                     makeMove(move);
-                } else i--;
+                }
             }
+            square.allowMove();
         }
         mutexForMove.unlock ();
     }
@@ -168,14 +203,16 @@ public class Agent implements Runnable {
         setCurrentPosition (move);
     }
 
-    private boolean pushAgent(Agent agentToPush) {
+    private void pushAgent(Agent agentToPush) {
         Message message = grabMessage(MessageType.REQUEST_MOVE);
-        if(message != null) {
-            sendMessage(this.getId(), message.getSender(), MessageType.RESPONSE_MOVE, true);
+        if(message == null) {
+            if(agentToPush.getAgentPower() <= agentPower) {
+                sendMessage(this.getId(), agentToPush.getId(), MessageType.REQUEST_MOVE, false);
+            }
         }
-            sendMessage(this.getId(), agentToPush.getId(), MessageType.REQUEST_MOVE, false);
-            Message msg = waitMessage(MessageType.RESPONSE_MOVE);
-            return getResponse(msg);
+        else {
+            handleWithPriority(message);
+        }
     }
 
     private void sendMessage(int sender, int receiver, MessageType type, boolean isSuccess) {
@@ -186,48 +223,81 @@ public class Agent implements Runnable {
         return MessageQueue.getNext(this, type);
     }
 
-    private Message waitMessage(MessageType type) {
-        Message message = grabMessage(type);
-        while(message == null) {
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            message = grabMessage(type);
-        }
-        return message;
-    }
-
     // Lorsque l'agent reçoit une request, il cherche où bouger
-    private void getRequest(Message message) {
+    private void handle(Message message) {
+        if (!mutexForMove.tryLock ()) return; // on essaye de verrouiller le mutex pour le déplacement (pour éviter les problèmes d'affichage)
         List<BoundedPoint2D> emptySquareList = new ArrayList<>();
         List<BoundedPoint2D> takenSquareList = new ArrayList<>();
+        List<Square> lockedSquareList = new ArrayList<>();
 
         List<BoundedPoint2D> moveList = environment.getNeighbours(currentPosition);
         for (BoundedPoint2D move : moveList) {
             Square square = environment.getSquare (move, Grids.CURRENT);
             Optional<Agent> a = square.getAgent();
-            if (a == null) emptySquareList.add(move);
-            else takenSquareList.add(move);
+            if(!square.freezeOtherMoves()) {
+                if (a.isPresent()) takenSquareList.add(move);
+            }
+            else {
+                lockedSquareList.add(square);
+                if (a.isEmpty()) emptySquareList.add(move);
+                else takenSquareList.add(move);
+            }
         }
         // Priorité aux cases vides (statégie de sélection aléatoire)
         // S'il n'y en a pas, on pousse un voisin
         Random r = new Random();
-        boolean hasMoved = false;
         if(emptySquareList.isEmpty()) {
             BoundedPoint2D chosenMove = takenSquareList.get(r.nextInt(takenSquareList.size()));
             Square square = environment.getSquare(chosenMove, Grids.CURRENT);
-            Agent agentToPush = square.getAgent().orElseThrow();
-            hasMoved = pushAgent(agentToPush);
-            if(hasMoved) makeMove(chosenMove);
+            Optional<Agent> agentToPush = square.getAgent();
+            if(agentToPush.isPresent()) {
+                System.out.println(message.getSender() + " pousse " + message.getReceiver() + " qui pousse l'agent " + agentToPush.orElseThrow().getId());
+                pushAgent(agentToPush.orElseThrow());
+            }
         }
         else {
             BoundedPoint2D chosenMove = emptySquareList.get(r.nextInt(emptySquareList.size()));
             makeMove(chosenMove);
-            hasMoved = true;
+            System.out.println(message.getSender() + " pousse " + message.getReceiver() + " à " + chosenMove);
+            //System.out.println(environment.getAgentList().get(message.getSender()).getPriority() + " vs " + environment.getAgentList().get(message.getReceiver()).getPriority());
         }
-        sendMessage(this.getId(), message.getSender(), MessageType.RESPONSE_MOVE, hasMoved);
+        //System.out.println(this.id + "est débloqué");
+        for (Square lockedSquare : lockedSquareList) {
+            lockedSquare.allowMove();
+        }
+        mutexForMove.unlock ();
+    }
+
+    public void handleWithPriority(Message message) {
+        if (!mutexForMove.tryLock ()) return; // on essaye de verrouiller le mutex pour le déplacement (pour éviter les problèmes d'affichage)
+
+        Queue<BoundedPoint2D> prioQueue = new PriorityQueue<>(
+                4,
+                Comparator.comparingInt(pos -> environment.getSpiralPriority(pos))
+        );
+        List<Square> lockedSquareList = new ArrayList<>();
+
+        List<BoundedPoint2D> moveList = environment.getNeighbours(currentPosition);
+        for (BoundedPoint2D move : moveList) {
+            Square square = environment.getSquare (move, Grids.CURRENT);
+            Optional<Agent> a = square.getAgent();
+            if(square.freezeOtherMoves()) lockedSquareList.add(square);
+            if (a.isEmpty() || a.orElseThrow().getId() != message.getSender()) prioQueue.add(move);
+        }
+
+        BoundedPoint2D move = prioQueue.poll();
+        Square square = environment.getSquare (move, Grids.CURRENT);
+        Optional<Agent> agent = square.getAgent();
+        if (square.isTaken() || agent.isPresent()) {
+            pushAgent(agent.orElseThrow());
+        } else {
+            makeMove(move);
+        }
+
+        for (Square lockedSquare : lockedSquareList) {
+            lockedSquare.allowMove();
+        }
+        mutexForMove.unlock();
     }
 
     private boolean getResponse(Message message) {
@@ -236,25 +306,6 @@ public class Agent implements Runnable {
 
         public int getId () {
         return id;
-    }
-
-    public Direction getDirection(BoundedPoint2D origin, BoundedPoint2D dest) {
-        int Xoff = dest.getX() - origin.getX();
-        int Yoff = dest.getY() - origin.getY();
-
-        if(Xoff == 1 && Yoff == 0) {
-            return Direction.RIGHT;
-        }
-        if(Xoff == -1 && Yoff == 0) {
-            return Direction.LEFT;
-        }
-        if(Xoff == 0 && Yoff == 1) {
-            return Direction.UP;
-        }
-        if(Xoff == 0 && Yoff == -1) {
-            return Direction.DOWN;
-        }
-        return null;
     }
 
 
