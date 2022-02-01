@@ -93,7 +93,8 @@ public class Controller implements Initializable {
                             agent -> isCurrentGrid?
                                 agent.getCurrentPosition():
                                 agent.getFinalPosition (),
-                            agent -> agent
+                            agent -> agent,
+                            (agent1, agent2) -> agent1
                         )
                 );
 

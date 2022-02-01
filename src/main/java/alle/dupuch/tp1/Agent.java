@@ -3,7 +3,6 @@ package alle.dupuch.tp1;
 import alle.dupuch.tp1.message.Message;
 import alle.dupuch.tp1.message.MessageQueue;
 import alle.dupuch.tp1.message.MessageType;
-import javafx.scene.effect.Light;
 
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
@@ -17,11 +16,16 @@ public class Agent implements Runnable {
     private Environment environment;
     private ReentrantLock mutexForMove;
     private double agentPower;
+    private FifoQueue<BoundedPoint2D> memory;
+    private BoundedPoint2D moveToDo;
+    private int attemptsToDoMove;
 
     public Agent () {
         this.id = nextId;
         ++nextId;
         this.mutexForMove = new ReentrantLock ();
+        this.memory = new FifoQueue<>(3);
+        this.attemptsToDoMove = 0;
     }
 
     @Override
@@ -31,8 +35,9 @@ public class Agent implements Runnable {
             Message msg = grabMessage(MessageType.REQUEST_MOVE);
             if(msg != null)
                 handleWithPriority(msg);
-            if (!isInFinalPosition ()) tryMoveAStar ();
-            //else System.out.println(mutexForMove.isLocked());
+            if (!isInFinalPosition ()) {
+                tryMoveAStar ();
+            }
             try {
                 Thread.sleep (200);
             } catch (InterruptedException e) {
@@ -51,46 +56,36 @@ public class Agent implements Runnable {
     }
 
     public void setAgentPower() {
-        agentPower = environment.getPriorityStrategyEdges(this);
+        agentPower = environment.getPriorityStrategySpiral(this);
     }
 
     public double getAgentPower() {
         return agentPower;
     }
 
-    private void tryMove() {
-        if (!mutexForMove.tryLock ()) return; // on essaye de verrouiller le mutex pour le déplacement (pour éviter les problèmes d'affichage)
-        List <BoundedPoint2D> possibleMoves = environment.getNeighbours (currentPosition);
-        List <BoundedPoint2D> movesByDistance = possibleMoves
-                .stream ()
-                .sorted (Comparator.comparingInt (move -> move.manhattanDistance (finalPosition)))
-                .collect (Collectors.toList ());
-        for (BoundedPoint2D move: movesByDistance) {
-            Square square = environment.getSquare (move, Grids.CURRENT);
-            if (!square.isTaken () && square.freezeOtherMoves()) {
-                environment.setNewPositionInCurrentGrid (this, move);
-                setCurrentPosition (move);
-                environment.getSquare (move, Grids.CURRENT).allowMove();
-                break;
-            }
-        }
-        mutexForMove.unlock ();
-    }
-
     private LinkedList<BoundedPoint2D> getAStarPath() {
-        BoundedPoint2D startingPosition = this.currentPosition;
-        LinkedList<BoundedPoint2D> openList = new LinkedList<BoundedPoint2D>();
-        openList.add(startingPosition);
-        LinkedList<BoundedPoint2D> closedList = new LinkedList<BoundedPoint2D>();
 
-        HashMap<BoundedPoint2D, Integer> gScore = new HashMap<BoundedPoint2D, Integer>();
+        // Si on a un mouvement à faire (après un push), le mouvement est prioritaire
+        if(attemptsToDoMove > 0 && moveToDo != null) {
+            attemptsToDoMove--;
+            LinkedList<BoundedPoint2D> path = new LinkedList<> ();
+            path.add(moveToDo);
+            return path;
+        }
+
+        BoundedPoint2D startingPosition = this.currentPosition;
+        LinkedList<BoundedPoint2D> openList = new LinkedList<>();
+        openList.add(startingPosition);
+        LinkedList<BoundedPoint2D> closedList = new LinkedList<>();
+
+        HashMap<BoundedPoint2D, Integer> gScore = new HashMap<>();
         gScore.put(startingPosition, 0);
-        HashMap<BoundedPoint2D, Integer> fScore = new HashMap<BoundedPoint2D, Integer>();
+        HashMap<BoundedPoint2D, Integer> fScore = new HashMap<>();
         fScore.put(startingPosition, startingPosition.manhattanDistance(finalPosition));
 
-        HashMap<BoundedPoint2D, BoundedPoint2D> cameFrom = new HashMap<BoundedPoint2D, BoundedPoint2D>();
+        HashMap<BoundedPoint2D, BoundedPoint2D> cameFrom = new HashMap<>();
 
-        LinkedList<BoundedPoint2D> path = new LinkedList<BoundedPoint2D> ();
+        LinkedList<BoundedPoint2D> path = new LinkedList<> ();
 
         while(!openList.isEmpty()) {
 
@@ -146,7 +141,7 @@ public class Agent implements Runnable {
                         gScore.put(neighbor, currGScore);
                         int currFScore = currGScore + neighbor.manhattanDistance(finalPosition);
                         if(square.freezeOtherMoves()) {
-                            if (square.isTaken())
+                            if (square.isTaken()) // On évite les cases avec des agents
                                 currFScore += 5;
                             if (square.getAgent().isPresent() && square.getAgent().orElseThrow().isInFinalPosition())
                                 currFScore += 5;
@@ -174,11 +169,30 @@ public class Agent implements Runnable {
         if(Math.random() > 0.1) {
             LinkedList<BoundedPoint2D> path = getAStarPath();
             move = path.get(0);
+            if(this.memory.contains(move)) {
+                memory.add(null);
+                mutexForMove.unlock();
+                return;
+            }
         }
         else { // 10% de chance de choisir un mouvement aléatoire (pour débloquer)
             Random r = new Random();
             List<BoundedPoint2D> moveList = environment.getNeighbours(currentPosition);
-            move = moveList.get(r.nextInt(moveList.size()));
+            // On vérifie qu'un autre agent ne veuille pas aller sur la case
+            // Pour éviter les problèmes de thread
+            while(move == null && !moveList.isEmpty()) {
+                BoundedPoint2D moveToTry = moveList.get(r.nextInt(moveList.size()));
+                Square square = environment.getSquare(moveToTry, Grids.CURRENT);
+                if(square.freezeOtherMoves()) {
+                    move = moveToTry;
+                    square.allowMove();
+                }
+                else moveList.remove(moveToTry);
+            }
+            if(move == null) {
+                mutexForMove.unlock();
+                return;
+            }
         }
 
         Square square = environment.getSquare (move, Grids.CURRENT);
@@ -189,8 +203,6 @@ public class Agent implements Runnable {
                 Optional<Agent> reqAgent = square.getAgent();
                 if (reqAgent.isPresent()) {
                     pushAgent(reqAgent.orElseThrow());
-                } else {
-                    makeMove(move);
                 }
             }
             square.allowMove();
@@ -199,6 +211,7 @@ public class Agent implements Runnable {
     }
 
     private void makeMove(BoundedPoint2D move) {
+        this.moveToDo = null;
         environment.setNewPositionInCurrentGrid (this, move);
         setCurrentPosition (move);
     }
@@ -206,9 +219,7 @@ public class Agent implements Runnable {
     private void pushAgent(Agent agentToPush) {
         Message message = grabMessage(MessageType.REQUEST_MOVE);
         if(message == null) {
-            if(agentToPush.getAgentPower() <= agentPower) {
-                sendMessage(this.getId(), agentToPush.getId(), MessageType.REQUEST_MOVE, false);
-            }
+            sendMessage(this.getId(), agentToPush.getId(), MessageType.REQUEST_MOVE, false);
         }
         else {
             handleWithPriority(message);
@@ -223,74 +234,39 @@ public class Agent implements Runnable {
         return MessageQueue.getNext(this, type);
     }
 
-    // Lorsque l'agent reçoit une request, il cherche où bouger
-    private void handle(Message message) {
-        if (!mutexForMove.tryLock ()) return; // on essaye de verrouiller le mutex pour le déplacement (pour éviter les problèmes d'affichage)
-        List<BoundedPoint2D> emptySquareList = new ArrayList<>();
-        List<BoundedPoint2D> takenSquareList = new ArrayList<>();
-        List<Square> lockedSquareList = new ArrayList<>();
-
-        List<BoundedPoint2D> moveList = environment.getNeighbours(currentPosition);
-        for (BoundedPoint2D move : moveList) {
-            Square square = environment.getSquare (move, Grids.CURRENT);
-            Optional<Agent> a = square.getAgent();
-            if(!square.freezeOtherMoves()) {
-                if (a.isPresent()) takenSquareList.add(move);
-            }
-            else {
-                lockedSquareList.add(square);
-                if (a.isEmpty()) emptySquareList.add(move);
-                else takenSquareList.add(move);
-            }
-        }
-        // Priorité aux cases vides (statégie de sélection aléatoire)
-        // S'il n'y en a pas, on pousse un voisin
-        Random r = new Random();
-        if(emptySquareList.isEmpty()) {
-            BoundedPoint2D chosenMove = takenSquareList.get(r.nextInt(takenSquareList.size()));
-            Square square = environment.getSquare(chosenMove, Grids.CURRENT);
-            Optional<Agent> agentToPush = square.getAgent();
-            if(agentToPush.isPresent()) {
-                System.out.println(message.getSender() + " pousse " + message.getReceiver() + " qui pousse l'agent " + agentToPush.orElseThrow().getId());
-                pushAgent(agentToPush.orElseThrow());
-            }
-        }
-        else {
-            BoundedPoint2D chosenMove = emptySquareList.get(r.nextInt(emptySquareList.size()));
-            makeMove(chosenMove);
-            System.out.println(message.getSender() + " pousse " + message.getReceiver() + " à " + chosenMove);
-            //System.out.println(environment.getAgentList().get(message.getSender()).getPriority() + " vs " + environment.getAgentList().get(message.getReceiver()).getPriority());
-        }
-        //System.out.println(this.id + "est débloqué");
-        for (Square lockedSquare : lockedSquareList) {
-            lockedSquare.allowMove();
-        }
-        mutexForMove.unlock ();
-    }
-
     public void handleWithPriority(Message message) {
         if (!mutexForMove.tryLock ()) return; // on essaye de verrouiller le mutex pour le déplacement (pour éviter les problèmes d'affichage)
-
+        System.out.println(id + " is handling message from " + message.getSender());
+        // On crée une liste de priorité en spirale, avec une priorité absolue sur les cases vides par rapport aux cases occupées
+        // On évitera également de pousser un agent qui a une priorité plus élevée que la notre et on priorise les cases à plus faibles priorité
         Queue<BoundedPoint2D> prioQueue = new PriorityQueue<>(
                 4,
-                Comparator.comparingInt(pos -> environment.getSpiralPriority(pos))
+                Comparator.comparingInt(pos -> (environment.getSquare((BoundedPoint2D)pos, Grids.CURRENT).getAgent().isEmpty() ? 26 : 0)
+                        + (environment.getSpiralPriority((BoundedPoint2D) pos) > this.agentPower ? 0 : environment.getSpiralPriority((BoundedPoint2D) pos)))
+                        .reversed()
         );
         List<Square> lockedSquareList = new ArrayList<>();
 
+        // On regarde les mouvements que l'on peut faire ou non
         List<BoundedPoint2D> moveList = environment.getNeighbours(currentPosition);
         for (BoundedPoint2D move : moveList) {
             Square square = environment.getSquare (move, Grids.CURRENT);
             Optional<Agent> a = square.getAgent();
             if(square.freezeOtherMoves()) lockedSquareList.add(square);
+            // Si la case est vide ou a un agent qui n'est pas l'agent qui push, on ajoute à la file
             if (a.isEmpty() || a.orElseThrow().getId() != message.getSender()) prioQueue.add(move);
         }
-
         BoundedPoint2D move = prioQueue.poll();
         Square square = environment.getSquare (move, Grids.CURRENT);
         Optional<Agent> agent = square.getAgent();
-        if (square.isTaken() || agent.isPresent()) {
+        if (square.isTaken() || agent.isPresent()) { // On pousse l'agent si présent
+            System.out.println(id + " pushes " + agent.orElseThrow().getId());
             pushAgent(agent.orElseThrow());
+            this.attemptsToDoMove = 7; // On va essayer 7 fois d'aller sur la case après le push
+            this.moveToDo = move;
         } else {
+            System.out.println(id + " is moving");
+            this.memory.add(currentPosition); // On ne reviendra pas sur la case pendant un certain temps
             makeMove(move);
         }
 

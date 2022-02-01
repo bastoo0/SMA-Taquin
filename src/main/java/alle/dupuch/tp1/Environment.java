@@ -30,7 +30,6 @@ public class Environment {
         populateGrid (finalGrid);
 
         generateSpiral();
-        printSpiral();
     }
 
     private void populateGrid (Grid grid) {
