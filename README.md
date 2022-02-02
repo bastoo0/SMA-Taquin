@@ -35,7 +35,7 @@ puis recommence sa boucle d'exécution).
 A chaque boucle d'exécution (même lorsque l'agent est sur sa postiion finale), l'agent vérifie qu'il n'a pas de demande de Push
 dans sa boîte aux lettres. Si c'est le cas, il va essayer de se pousser en regardant les cases sur lesquelles il peut aller
 en fonction de leur priorité (cases vides prioritaires + priorité en spirale pour essayer de libérer de l'espace.
-L'agent va en priorité sur les cases vides qui sont au centre et évite de push les agents qui sont déjà positionnés sur les bords,
+L'agent va en priorité sur les cases vides qui sont sur les côtés et évite de push les agents qui sont déjà positionnés sur les bords,
 c'est à dire ceux qui ont une priorité en spirale plus élevée que la sienne).
 
 Si l'agent n'a pas de case libre pour se pousser, il doit pousser un autre agent, auquel cas il va garder la case de l'agent
